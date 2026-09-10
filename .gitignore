@@ -31,3 +31,11 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Logs ###
+*.log
+backend-err.log
+backend.err.log
+
+### Uploads ###
+uploads/
