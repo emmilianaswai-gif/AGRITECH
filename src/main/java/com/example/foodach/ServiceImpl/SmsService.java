@@ -9,22 +9,37 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.util.UriComponentsBuilder;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class SmsService {
 
+    private static final String DEFAULT_GATEWAY_URL = "https://api.africastalking.com/version1/messaging";
+
+    private static final Pattern BALANCE_PATTERN = Pattern.compile("([A-Za-z]{3})\\s*([0-9]+(?:\\.[0-9]+)?)");
+
     private final SmsRepository smsRepository;
 
-    @Value("${sms.gateway.url:}")
+    @Value("${sms.gateway.url:" + DEFAULT_GATEWAY_URL + "}")
     private String gatewayUrl;
 
     @Value("${sms.gateway.api-key:}")
     private String gatewayApiKey;
+
+    @Value("${sms.gateway.username:}")
+    private String gatewayUsername;
+
+    @Value("${sms.gateway.from:}")
+    private String senderId;
 
     public SmsResponse send(SmsRequest request) {
         if (request.toPhone() == null || request.toPhone().isBlank()) {
@@ -35,23 +50,28 @@ public class SmsService {
         }
 
         String toPhone = normalizePhone(request.toPhone().trim());
-        String provider = gatewayUrl.isBlank() ? "Simulated gateway" : "SMS gateway";
+        boolean simulated = gatewayApiKey == null || gatewayApiKey.isBlank();
+        String provider = simulated ? "Simulated gateway" : "Africa's Talking";
         String status;
 
-        if (gatewayUrl.isBlank()) {
+        if (simulated) {
             log.info("[SMS SIMULATED] To {}: {}", toPhone, request.body());
             status = "Simulated";
         } else {
             try {
                 RestClient client = RestClient.builder().baseUrl(gatewayUrl).build();
+                LinkedMultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+                form.add("username", gatewayUsername);
+                form.add("to", toPhone);
+                form.add("message", request.body().trim());
+                if (senderId != null && !senderId.isBlank()) {
+                    form.add("from", senderId.trim());
+                }
                 client.post()
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .header(gatewayApiKey.isBlank() ? "Authorization" : "Authorization", gatewayApiKey.isBlank() ? "" : "Bearer " + gatewayApiKey)
-                        .body(Map.of(
-                                "to", toPhone,
-                                "from", request.fromName() == null ? "" : request.fromName(),
-                                "message", request.body()
-                        ))
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .accept(MediaType.APPLICATION_JSON)
+                        .header("apiKey", gatewayApiKey)
+                        .body(form)
                         .retrieve()
                         .toBodilessEntity();
                 status = "Sent";
@@ -70,6 +90,42 @@ public class SmsService {
         sms.setProvider(provider);
 
         return mapToResponseDTO(smsRepository.save(sms));
+    }
+
+    public Map<String, Object> getBalance() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("provider", gatewayApiKey == null || gatewayApiKey.isBlank() ? null : "Africa's Talking");
+        result.put("simulated", gatewayApiKey == null || gatewayApiKey.isBlank());
+        result.put("balance", null);
+        result.put("currency", null);
+        result.put("units", null);
+
+        if (result.get("simulated").equals(Boolean.TRUE)) {
+            return result;
+        }
+
+        try {
+            String uri = UriComponentsBuilder.fromUriString("https://api.africastalking.com/user")
+                    .queryParam("username", gatewayUsername)
+                    .build()
+                    .toUriString();
+            String body = RestClient.builder().baseUrl(gatewayUrl).build()
+                    .get()
+                    .uri(uri)
+                    .header("apiKey", gatewayApiKey)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .retrieve()
+                    .body(String.class);
+
+            Matcher m = BALANCE_PATTERN.matcher(body == null ? "" : body);
+            if (m.find()) {
+                result.put("currency", m.group(1).toUpperCase());
+                result.put("balance", Double.parseDouble(m.group(2)));
+            }
+        } catch (Exception e) {
+            log.warn("Could not fetch Africa's Talking balance: {}", e.getMessage());
+        }
+        return result;
     }
 
     private String normalizePhone(String raw) {

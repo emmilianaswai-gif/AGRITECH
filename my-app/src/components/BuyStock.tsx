@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { adminApi, type CustomerOrder, type InventoryItem } from "../api/client";
+import { adminApi, storeApi, storeSellerToken, storeIdFromSeller, type CustomerOrder, type InventoryItem, type Store } from "../api/client";
 import { useUser } from "../context/UserContext";
 import { useTheme } from "../context/ThemeContext";
 import ConfirmDialog from "./ConfirmDialog";
@@ -17,6 +17,9 @@ export default function BuyStock() {
 
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [requests, setRequests] = useState<CustomerOrder[]>([]);
+  const [stores, setStores] = useState<Store[]>([]);
+  const [activeStoreId, setActiveStoreId] = useState<number | null>(null);
+  const [storeSearch, setStoreSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<InventoryItem | null>(null);
@@ -39,9 +42,14 @@ export default function BuyStock() {
 
   const load = async () => {
     try {
-      const [inv, orders] = await Promise.all([adminApi.inventory.getAll(), adminApi.orders.getAll()]);
+      const [inv, orders, allStores] = await Promise.all([
+        adminApi.inventory.getAll(),
+        adminApi.orders.getAll(),
+        storeApi.getAll().catch(() => []),
+      ]);
       setItems(inv);
       setRequests(orders.filter((o) => o.customerUserId === user?.id));
+      setStores(allStores);
       setError("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load stock");
@@ -105,7 +113,7 @@ export default function BuyStock() {
         customer: user.fullName,
         quantity,
         customerUserId: user.id,
-        sellerUserId: undefined,
+        sellerUserId: isFarmer && activeStore ? storeSellerToken(activeStore.id) : undefined,
         paymentMethod: isRequest ? "Request" : mode === "debt" ? "Credit" : payMethod,
         phone: mode === "debt" ? debtPhone : undefined,
         location: mode === "debt" ? debtLocation : undefined,
@@ -113,7 +121,7 @@ export default function BuyStock() {
         longitude: mode === "debt" ? debtLng ?? undefined : undefined,
       });
       if (isRequest) {
-        setNotice(`Your request for ${quantity} ${selected.unit} of ${selected.title} has been sent.`);
+        setNotice(`${activeStore && isFarmer ? `${activeStore.name} · ` : ""}Your request for ${quantity} ${selected.unit} of ${selected.title} has been sent.`);
       } else if (mode === "debt") {
         setNotice(`Purchased ${quantity} ${selected.unit} of ${selected.title} on debt. It was recorded as credit.`);
       } else if (payMethod === "Cash") {
@@ -171,6 +179,37 @@ export default function BuyStock() {
   const card = dark ? "bg-[#12201a] border-gray-700" : "bg-white border-gray-100";
   const muted = dark ? "text-gray-400" : "text-gray-500";
 
+  const isFarmer = user?.role === "FAMER";
+  const activeStore = activeStoreId == null ? null : stores.find((s) => s.id === activeStoreId) ?? null;
+
+  const filteredStores = stores.filter((s) => {
+    const q = storeSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      (s.name ?? "").toLowerCase().includes(q) ||
+      (s.category ?? "").toLowerCase().includes(q) ||
+      (s.location ?? "").toLowerCase().includes(q)
+    );
+  });
+
+  const visibleItems = isFarmer && activeStore
+    ? items.filter((it) => {
+        const storeName = (activeStore.name ?? "").trim().toLowerCase();
+        const supplier = (it.supplier ?? "").trim().toLowerCase();
+        if (!supplier || !storeName) return false;
+        return supplier === storeName || supplier.includes(storeName) || storeName.includes(supplier);
+      })
+    : items;
+
+  const storeOfOrder = (o: CustomerOrder): Store | null => {
+    const id = storeIdFromSeller(o.sellerUserId);
+    if (id == null) return null;
+    return stores.find((s) => s.id === id) ?? null;
+  };
+
+  const storeOrderCount = (store: Store): number =>
+    requests.filter((o) => storeIdFromSeller(o.sellerUserId) === store.id).length;
+
   const orderTotal = (quantity || 0) * (selected?.sellingPrice ?? 0);
 
   const statusBadge = (s?: string | null): { label: string; cls: string } => {
@@ -207,13 +246,114 @@ export default function BuyStock() {
         <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-2xl px-4 py-3">{error}</div>
       )}
 
+      {isFarmer && (
+        <div className={`rounded-[28px] border shadow-sm overflow-hidden ${card}`}>
+          <div className="px-4 py-4 border-b border-gray-100 dark:border-gray-700">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="font-bold">Buy from another agro store</h3>
+                <p className={`text-xs ${muted}`}>
+                  Farmers can buy stock straight from any agro store registered on the platform.
+                </p>
+              </div>
+              {activeStore && (
+                <button
+                  onClick={() => setActiveStoreId(null)}
+                  className="text-xs font-semibold text-green-700 dark:text-green-400 border border-green-700 dark:border-green-500 rounded-xl px-3 py-2 hover:bg-green-50 dark:hover:bg-green-900/30 transition-colors"
+                >
+                  Show all agro stores
+                </button>
+              )}
+            </div>
+            <div className="relative mt-3">
+              <svg
+                className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+              </svg>
+              <input
+                type="text"
+                value={storeSearch}
+                onChange={(e) => setStoreSearch(e.target.value)}
+                placeholder="Search agro stores by name, category or location..."
+                className={`w-full pl-9 pr-3 py-2 text-sm rounded-xl border focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                  dark ? "bg-[#0d1813] border-gray-700 text-gray-100" : "bg-white border-gray-200 text-gray-900"
+                }`}
+              />
+            </div>
+          </div>
+          {filteredStores.length === 0 ? (
+            <p className={`text-sm py-8 text-center ${muted}`}>No agro stores found.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-4">
+              {filteredStores.map((store) => {
+                const selected = activeStore?.id === store.id;
+                const placedOrders = storeOrderCount(store);
+                return (
+                  <button
+                    key={store.id ?? store.name}
+                    onClick={() => setActiveStoreId(selected ? null : store.id ?? null)}
+                    className={`text-left rounded-2xl border p-4 flex flex-col gap-1 transition-colors ${
+                      selected
+                        ? "border-green-600 bg-green-50 dark:bg-green-900/40"
+                        : dark
+                          ? "border-gray-700 hover:border-green-300 bg-[#0d1813]"
+                          : "border-gray-200 hover:border-green-300 bg-white"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-bold text-sm truncate">{store.name}</p>
+                      <span className="text-[11px] font-semibold text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/50 rounded-full px-2 py-0.5 whitespace-nowrap">
+                        {store.category ?? "Agro Store"}
+                      </span>
+                    </div>
+                    <p className={`text-xs truncate ${muted}`}>
+                      {store.location || "Location not set"}
+                      {store.phone ? ` · ${store.phone}` : ""}
+                    </p>
+                    {placedOrders > 0 && (
+                      <span className={`inline-flex self-start items-center text-[11px] font-semibold rounded-full px-2.5 py-1 ${
+                        dark ? "bg-amber-900/40 text-amber-300" : "bg-amber-50 text-amber-700"
+                      }`}>
+                        {placedOrders} order{placedOrders === 1 ? "" : "s"} sent to this store
+                      </span>
+                    )}
+                    <span
+                      className={`mt-2 inline-flex items-center justify-center rounded-xl px-3 py-1.5 text-xs font-bold transition-colors ${
+                        selected
+                          ? "bg-green-800 text-white"
+                          : dark
+                            ? "bg-[#1d2a23] text-green-300"
+                            : "bg-green-50 text-green-800"
+                      }`}
+                    >
+                      {selected ? "Viewing stock" : "Buy stock from this store"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {loading ? (
         <p className={`text-sm py-10 text-center ${muted}`}>Loading stock...</p>
-      ) : items.length === 0 ? (
-        <p className={`text-sm py-10 text-center ${muted}`}>No produce available right now. Check back soon.</p>
+      ) : visibleItems.length === 0 ? (
+        activeStore ? (
+          <p className={`text-sm py-10 text-center ${muted}`}>
+            This agro store has not listed any stock yet. Pick another store or show all agro stores.
+          </p>
+        ) : (
+          <p className={`text-sm py-10 text-center ${muted}`}>No produce available right now. Check back soon.</p>
+        )
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {items.map((item) => (
+          {visibleItems.map((item) => (
             <div key={item.id ?? item.title} className={`rounded-2xl border p-4 shadow-sm flex flex-col ${card}`}>
               <div className="flex items-start justify-between gap-2">
                 <p className="font-bold">{item.title}</p>
@@ -305,6 +445,7 @@ export default function BuyStock() {
                     </th>
                   )}
                   <th className={`px-4 py-3 font-semibold ${muted}`}>Item</th>
+                  <th className={`px-4 py-3 font-semibold ${muted}`}>Store</th>
                   <th className={`px-4 py-3 font-semibold ${muted}`}>Qty</th>
                   <th className={`px-4 py-3 font-semibold ${muted}`}>Total</th>
                   <th className={`px-4 py-3 font-semibold ${muted}`}>Payment</th>
@@ -314,6 +455,7 @@ export default function BuyStock() {
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {requests.map((o) => {
                   const badge = statusBadge(o.status);
+                  const orderStore = storeOfOrder(o);
                   return (
                     <tr key={o.id ?? o.itemTitle}>
                       {selectMode && (
@@ -328,6 +470,15 @@ export default function BuyStock() {
                         </td>
                       )}
                       <td className="px-4 py-3 font-semibold">{o.itemTitle}</td>
+                      <td className="px-4 py-3">
+                        {orderStore ? (
+                          <span className="text-xs font-semibold text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/50 rounded-full px-3 py-1">
+                            {orderStore.name}
+                          </span>
+                        ) : (
+                          <span className={`text-xs ${muted}`}>—</span>
+                        )}
+                      </td>
                       <td className={`px-4 py-3 ${muted}`}>{o.quantity ?? 0} {o.unit}</td>
                       <td className="px-4 py-3 font-semibold">{money(o.total ?? 0)}</td>
                       <td className="px-4 py-3">

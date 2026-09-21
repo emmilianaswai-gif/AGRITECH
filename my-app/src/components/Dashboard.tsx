@@ -1,5 +1,20 @@
 import { useEffect, useState } from "react";
 import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
   learningApi,
   storeApi,
   adminApi,
@@ -7,10 +22,12 @@ import {
   type LearningResource,
   type CustomerOrder,
   type InventoryTotals,
+  type TradingStats,
 } from "../api/client";
 import { services } from "../data/services";
 import { useServices } from "../context/ServicesContext";
 import { useUser } from "../context/UserContext";
+import { useTheme } from "../context/ThemeContext";
 import { roleLabel, accessRate } from "../data/access";
 import { useAccess } from "../context/AccessContext";
 import { useLanguage } from "../context/LanguageContext";
@@ -50,11 +67,14 @@ export default function Dashboard() {
   const { user } = useUser();
   const { t } = useLanguage();
   const { canAccess } = useAccess();
+  const { theme } = useTheme();
+  const dark = theme === "dark";
 
   const [stores, setStores] = useState<Store[]>([]);
   const [learning, setLearning] = useState<LearningResource[]>([]);
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
   const [summary, setSummary] = useState<InventoryTotals | null>(null);
+  const [trading, setTrading] = useState<TradingStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -63,16 +83,18 @@ export default function Dashboard() {
   const load = async () => {
     setLoading(true);
     try {
-      const [st, l, o, sum] = await Promise.all([
+      const [st, l, o, sum, ts] = await Promise.all([
         storeApi.getAll(),
         learningApi.getAll(),
         adminApi.orders.getAll(),
         adminApi.orders.summary(),
+        adminApi.orders.tradingStats(),
       ]);
       setStores(st);
       setLearning(l);
       setOrders(o);
       setSummary(sum);
+      setTrading(ts);
       setError("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load dashboard");
@@ -196,6 +218,56 @@ export default function Dashboard() {
     day: "numeric",
   });
 
+  const chartGrid = dark ? "#1d2a23" : "#e5e7eb";
+  const chartAxis = dark ? "#9ca3af" : "#6b7280";
+  const chartTooltip = {
+    backgroundColor: dark ? "#12201a" : "#ffffff",
+    border: `1px solid ${dark ? "#374151" : "#e5e7eb"}`,
+    borderRadius: 12,
+    color: dark ? "#f3f4f6" : "#111827",
+    fontSize: 12,
+  };
+
+  const saleStatus = (s?: string | null) => s !== "Requested" && s !== "Pending" && s !== "Rejected";
+  const saleOrders = orders.filter((o) => saleStatus(o.status));
+  const sumOf = (list: CustomerOrder[], f: (o: CustomerOrder) => number | null | undefined): number =>
+    list.reduce((acc, o) => acc + (f(o) ?? 0), 0);
+
+  const periodData = [
+    { label: "Today", sales: trading?.todaySales ?? 0, profit: trading?.todayProfit ?? 0 },
+    { label: "Month", sales: trading?.monthSales ?? 0, profit: trading?.monthProfit ?? 0 },
+    { label: "6 months", sales: trading?.sixMonthSales ?? 0, profit: trading?.sixMonthProfit ?? 0 },
+    { label: "Year", sales: trading?.yearSales ?? 0, profit: trading?.yearProfit ?? 0 },
+    { label: "All time", sales: trading?.allTimeSales ?? 0, profit: trading?.allTimeProfit ?? 0 },
+  ];
+
+  const statusCounts = orders.reduce<Record<string, number>>((acc, o) => {
+    const key = o.status ?? (saleStatus(o.status) ? "Paid" : "Requested");
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  const statusMeta: Record<string, string> = {
+    Paid: "#16a34a",
+    Approved: "#2563eb",
+    Credit: "#d97706",
+    Requested: "#6366f1",
+    Pending: "#9ca3af",
+    Rejected: "#e11d48",
+  };
+  const statusData = Object.entries(statusCounts).map(([name, value]) => ({
+    name,
+    value,
+    color: statusMeta[name] ?? "#10b981",
+  }));
+
+  const movementData = [
+    { name: "Cash collected", value: trading?.cashCollected ?? 0, color: "#16a34a" },
+    { name: "Cheque collected", value: trading?.checkCollected ?? 0, color: "#2563eb" },
+    { name: "Outstanding debt", value: trading?.outstandingDebt ?? 0, color: "#d97706" },
+    { name: "Pending", value: trading?.pendingTotal ?? 0, color: "#9ca3af" },
+  ];
+
   return (
     <div className="space-y-6">
       {/* Welcome banner */}
@@ -237,6 +309,100 @@ export default function Dashboard() {
             <p className="text-[11px] opacity-70 mt-0.5 truncate">{stat.sub}</p>
           </button>
         ))}
+      </div>
+
+      {/* Business movement */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white dark:bg-[#12201a] rounded-[28px] border border-gray-100 dark:border-gray-700 shadow-sm p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="font-bold text-green-950 dark:text-green-100">Revenue & profit movement</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400">How your business is growing over time.</p>
+            </div>
+            <span className="text-xs font-semibold text-gray-400">{money(sumOf(saleOrders, (o) => o.total))} revenue</span>
+          </div>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={periodData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gSales" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#16a34a" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="#16a34a" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gProfit" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#0891b2" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="#0891b2" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke={chartGrid} vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: chartAxis }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: chartAxis }} axisLine={false} tickLine={false} tickFormatter={(v) => fmt(Number(v))} />
+                <Tooltip contentStyle={chartTooltip} formatter={(v) => money(Number(v))} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Area type="monotone" dataKey="sales" name="Sales" stroke="#16a34a" strokeWidth={2} fill="url(#gSales)" />
+                <Area type="monotone" dataKey="profit" name="Profit" stroke="#0891b2" strokeWidth={2} fill="url(#gProfit)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-[#12201a] rounded-[28px] border border-gray-100 dark:border-gray-700 shadow-sm p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="font-bold text-green-950 dark:text-green-100">Orders by status</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Where your orders currently stand.</p>
+            </div>
+            <span className="text-xs font-semibold text-gray-400">{orders.length} orders</span>
+          </div>
+          {statusData.length === 0 ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400 py-16 text-center">No orders yet.</p>
+          ) : (
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={statusData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={2}>
+                    {statusData.map((d) => (
+                      <Cell key={d.name} fill={d.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={chartTooltip} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Money movement */}
+      <div className="bg-white dark:bg-[#12201a] rounded-[28px] border border-gray-100 dark:border-gray-700 shadow-sm p-5">
+        <div className="mb-4">
+          <h3 className="font-bold text-green-950 dark:text-green-100">Money movement</h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400">Cash in, credit and pending amounts across the business.</p>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+          {movementData.map((m) => (
+            <div key={m.name} className="rounded-2xl bg-gray-50 dark:bg-[#0d1813] px-4 py-3">
+              <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">{m.name}</p>
+              <p className="font-bold text-base mt-0.5" style={{ color: m.color }}>{money(m.value)}</p>
+            </div>
+          ))}
+        </div>
+        <div className="h-56">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={movementData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={chartGrid} vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 11, fill: chartAxis }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: chartAxis }} axisLine={false} tickLine={false} tickFormatter={(v) => fmt(Number(v))} />
+              <Tooltip contentStyle={chartTooltip} formatter={(v) => money(Number(v))} cursor={{ fill: dark ? "#1d2a23" : "#f3f4f6" }} />
+              <Bar dataKey="value" name="Amount" radius={[8, 8, 0, 0]}>
+                {movementData.map((m) => (
+                  <Cell key={m.name} fill={m.color} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
       {/* Quick access */}

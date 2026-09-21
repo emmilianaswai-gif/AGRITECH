@@ -5,6 +5,7 @@ import MyStock from "./MyStock";
 import Customers from "./Customers";
 import Wallet from "./Wallet";
 import Orders from "./Orders";
+import Report from "./Report";
 import Messages from "./Messages";
 import Exchange from "./Exchange";
 import BuyStock from "./BuyStock";
@@ -63,6 +64,7 @@ export default function ServiceScreen() {
                 {active === "customer" && <Customers />}
                 {active === "wallet" && <Wallet />}
                 {active === "orders" && <Orders />}
+                {active === "report" && <Report />}
                 {active === "messages" && <Messages />}
                 {active === "exchange" && <Exchange />}
                 {active === "buy" && <BuyStock />}

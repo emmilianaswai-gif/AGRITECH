@@ -253,7 +253,7 @@ function StoreRegisterModal({ onClose }: { onClose: () => void }) {
 }
 
 export default function LoginScreen() {
-  const { login, enterAsGuest } = useUser();
+  const { login } = useUser();
   const { theme, toggleTheme } = useTheme();
   const { open: openGetStarted } = useGetStarted();
   const { roles } = useAccess();
@@ -459,20 +459,6 @@ export default function LoginScreen() {
             </div>
 
             <div className="space-y-3">
-              <button
-                onClick={enterAsGuest}
-                className={`w-full flex items-center justify-center gap-2 rounded-xl border px-6 py-3 font-semibold text-sm transition-colors ${
-                  dark
-                    ? "border-gray-700 text-green-200 hover:bg-[#12201a]"
-                    : "border-green-200 text-green-800 hover:bg-green-50"
-                }`}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18zm0 0c0-4.418 3.582-8 8-8m-8 8a9 9 0 01-8-8m8 8a8.964 8.964 0 008-8m-8 0h.008M21 12a9 9 0 00-9-9m0 0C7.029 3 3 7.029 3 12" />
-                </svg>
-                Use the app without an account
-              </button>
-
               <button
                 onClick={() => setShowStore(true)}
                 className={`w-full flex items-center justify-center gap-2 rounded-xl border px-6 py-3 font-semibold text-sm transition-colors ${

@@ -270,6 +270,8 @@ export interface SmsRecord {
   body: string;
   status: string | null;
   provider: string | null;
+  header?: string | null;
+  segments?: number | null;
   createdAt: string | null;
 }
 
@@ -278,11 +280,37 @@ export interface SmsRequestData {
   toName?: string;
   toPhone: string;
   body: string;
+  header?: string;
 }
+
+export interface SmsBalance {
+  provider: string | null;
+  balance: number | null;
+  currency: string | null;
+  units: number | null;
+  simulated: boolean;
+}
+
+type SmsBalanceRaw = Partial<SmsBalance> & {
+  credit?: number | null;
+  smsBalance?: number | null;
+  amount?: number | null;
+};
 
 export const smsApi = {
   send: (data: SmsRequestData): Promise<SmsRecord> =>
     request<SmsRecord>("/sms/send", { method: "POST", body: JSON.stringify(data) }),
+
+  balance: async (): Promise<SmsBalance> => {
+    const raw = await request<SmsBalanceRaw>("/sms/balance");
+    return {
+      provider: raw.provider ?? null,
+      balance: raw.balance ?? raw.credit ?? raw.amount ?? null,
+      currency: raw.currency ?? null,
+      units: raw.units ?? raw.smsBalance ?? null,
+      simulated: raw.simulated ?? raw.provider == null,
+    };
+  },
 };
 
 export const accessApi = {
@@ -475,6 +503,16 @@ export interface CustomerOrderRequest {
   location?: string;
   latitude?: number;
   longitude?: number;
+}
+
+export function storeSellerToken(storeId: number | null | undefined): string {
+  return `store:${storeId}`;
+}
+
+export function storeIdFromSeller(sellerUserId: string | null | undefined): number | null {
+  if (!sellerUserId) return null;
+  const m = sellerUserId.match(/^store:(\d+)$/);
+  return m ? Number(m[1]) : null;
 }
 
 export interface InventoryTotals {

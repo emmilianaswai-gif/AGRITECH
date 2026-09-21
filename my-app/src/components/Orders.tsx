@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { adminApi, type CustomerOrder, type InventoryTotals } from "../api/client";
+import { adminApi, storeApi, storeIdFromSeller, type CustomerOrder, type InventoryTotals, type Store } from "../api/client";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import ConfirmDialog from "./ConfirmDialog";
@@ -33,6 +33,7 @@ export default function Orders() {
   const dark = theme === "dark";
 
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
+  const [stores, setStores] = useState<Store[]>([]);
   const [summary, setSummary] = useState<InventoryTotals | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -48,8 +49,13 @@ export default function Orders() {
   const load = async () => {
     setLoading(true);
     try {
-      const [o, s] = await Promise.all([adminApi.orders.getAll(), adminApi.orders.summary()]);
+      const [o, s, allStores] = await Promise.all([
+        adminApi.orders.getAll(),
+        adminApi.orders.summary(),
+        storeApi.getAll().catch(() => []),
+      ]);
       setOrders(o);
+      setStores(allStores);
       setSummary(s);
       setError("");
     } catch (err) {
@@ -126,6 +132,12 @@ export default function Orders() {
   const muted = dark ? "text-gray-400" : "text-gray-500";
 
   const sorted = [...orders].sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+
+  const storeOfOrder = (o: CustomerOrder): Store | null => {
+    const id = storeIdFromSeller(o.sellerUserId);
+    if (id == null) return null;
+    return stores.find((s) => s.id === id) ?? null;
+  };
 
   return (
     <div className={`space-y-6 ${root}`}>
@@ -223,6 +235,7 @@ export default function Orders() {
                   )}
                   <th className={`px-4 py-3 font-semibold ${muted}`}>Item</th>
                   <th className={`px-4 py-3 font-semibold ${muted}`}>Customer</th>
+                  <th className={`px-4 py-3 font-semibold ${muted}`}>Store</th>
                   <th className={`px-4 py-3 font-semibold ${muted}`}>Qty</th>
                   <th className={`px-4 py-3 font-semibold ${muted}`}>Total</th>
                   <th className={`px-4 py-3 font-semibold ${muted}`}>Profit</th>
@@ -233,6 +246,7 @@ export default function Orders() {
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {sorted.map((o) => {
                   const badge = statusBadge(o.status);
+                  const orderStore = storeOfOrder(o);
                   return (
                     <tr key={o.id ?? o.itemTitle}>
                       {selectMode && (
@@ -248,6 +262,15 @@ export default function Orders() {
                       )}
                       <td className="px-4 py-3 font-semibold">{o.itemTitle}</td>
                       <td className={`px-4 py-3 ${muted}`}>{o.customer}</td>
+                      <td className="px-4 py-3">
+                        {orderStore ? (
+                          <span className="text-xs font-semibold text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/50 rounded-full px-3 py-1">
+                            {orderStore.name}
+                          </span>
+                        ) : (
+                          <span className={`text-xs ${muted}`}>—</span>
+                        )}
+                      </td>
                       <td className={`px-4 py-3 ${muted}`}>
                         {o.quantity ?? 0} {o.unit}
                       </td>

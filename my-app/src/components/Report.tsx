@@ -1,4 +1,19 @@
 import { useEffect, useState, type ReactNode } from "react";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { adminApi, type CustomerOrder, type InventoryItem, type TradingStats } from "../api/client";
 import { useTheme } from "../context/ThemeContext";
 import Pagination, { usePagination } from "./Pagination";
@@ -79,6 +94,81 @@ export default function Report() {
   const sum = (list: CustomerOrder[], f: (o: CustomerOrder) => number | null | undefined): number =>
     list.reduce((acc, o) => acc + (f(o) ?? 0), 0);
 
+  const chartGrid = dark ? "#1d2a23" : "#e5e7eb";
+  const chartAxis = dark ? "#9ca3af" : "#6b7280";
+  const chartTooltip = {
+    backgroundColor: dark ? "#12201a" : "#ffffff",
+    border: `1px solid ${dark ? "#374151" : "#e5e7eb"}`,
+    borderRadius: 12,
+    color: dark ? "#f3f4f6" : "#111827",
+    fontSize: 12,
+  };
+
+  const dayKey = (iso?: string | null): string => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+
+  const trendData = (() => {
+    const buckets: { key: string; label: string; sales: number; profit: number }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      buckets.push({
+        key: dayKey(d.toISOString()),
+        label: d.toLocaleDateString("en-US", { weekday: "short" }),
+        sales: 0,
+        profit: 0,
+      });
+    }
+    const byKey = new Map(buckets.map((b) => [b.key, b]));
+    sales.forEach((o) => {
+      const b = byKey.get(dayKey(o.createdAt));
+      if (b) {
+        b.sales += o.total ?? 0;
+        b.profit += o.profit ?? 0;
+      }
+    });
+    return buckets;
+  })();
+
+  const periodData = [
+    { label: "Today", sales: stats?.todaySales ?? 0, profit: stats?.todayProfit ?? 0 },
+    { label: "Month", sales: stats?.monthSales ?? 0, profit: stats?.monthProfit ?? 0 },
+    { label: "6 mo", sales: stats?.sixMonthSales ?? 0, profit: stats?.sixMonthProfit ?? 0 },
+    { label: "Year", sales: stats?.yearSales ?? 0, profit: stats?.yearProfit ?? 0 },
+    { label: "All", sales: stats?.allTimeSales ?? 0, profit: stats?.allTimeProfit ?? 0 },
+  ];
+
+  const statusMeta: Record<string, string> = {
+    Paid: "#16a34a",
+    Approved: "#2563eb",
+    Credit: "#d97706",
+    Requested: "#6366f1",
+    Pending: "#9ca3af",
+    Rejected: "#e11d48",
+  };
+  const statusData = Object.entries(
+    orders.reduce<Record<string, number>>((acc, o) => {
+      const k = o.status ?? "Requested";
+      acc[k] = (acc[k] ?? 0) + 1;
+      return acc;
+    }, {}),
+  ).map(([name, value]) => ({ name, value, color: statusMeta[name] ?? "#0891b2" }));
+
+  const categoryData = Object.entries(
+    inventory.reduce<Record<string, number>>((acc, it) => {
+      const k = it.category || "Produce";
+      acc[k] = (acc[k] ?? 0) + (it.quantity ?? 0) * (it.sellingPrice ?? 0);
+      return acc;
+    }, {}),
+  )
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 6);
+
   return (
     <div className="space-y-6">
       <div className="bg-gradient-to-br from-cyan-800 to-teal-700 rounded-[28px] p-6 text-white shadow-lg shadow-cyan-800/20">
@@ -127,6 +217,139 @@ export default function Report() {
               <p className="text-[11px] text-gray-500 dark:text-gray-400">
                 {stats?.outstandingDebtCount ?? 0} account{((stats?.outstandingDebtCount ?? 0) === 1) ? "" : "s"}
               </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className={`lg:col-span-2 rounded-[28px] border shadow-sm p-5 ${card}`}>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="w-8 h-8 rounded-xl bg-green-100 text-green-700 flex items-center justify-center">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 17l6-6 4 4 8-8" />
+                    </svg>
+                  </span>
+                  <div>
+                    <h3 className="font-bold text-sm">Sales trend</h3>
+                    <p className={`text-[11px] ${muted}`}>Last 7 days</p>
+                  </div>
+                </div>
+                <span className={`text-xs font-semibold ${muted}`}>
+                  {money(sum(sales, (o) => o.total))} total
+                </span>
+              </div>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={trendData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="rSales" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#16a34a" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#16a34a" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="rProfit" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#0891b2" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#0891b2" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke={chartGrid} vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: chartAxis }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: chartAxis }} axisLine={false} tickLine={false} tickFormatter={(v) => fmt(Number(v))} />
+                    <Tooltip contentStyle={chartTooltip} formatter={(v) => money(Number(v))} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Area type="monotone" dataKey="sales" name="Sales" stroke="#16a34a" strokeWidth={2} fill="url(#rSales)" />
+                    <Area type="monotone" dataKey="profit" name="Profit" stroke="#0891b2" strokeWidth={2} fill="url(#rProfit)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className={`rounded-[28px] border shadow-sm p-5 ${card}`}>
+              <div className="flex items-center gap-2 mb-4">
+                <span className="w-8 h-8 rounded-xl bg-cyan-100 text-cyan-700 flex items-center justify-center">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 3a8 8 0 108 8h-8V3z" />
+                  </svg>
+                </span>
+                <div>
+                  <h3 className="font-bold text-sm">Orders by status</h3>
+                  <p className={`text-[11px] ${muted}`}>{orders.length} orders</p>
+                </div>
+              </div>
+              {statusData.length === 0 ? (
+                <p className={`text-sm py-16 text-center ${muted}`}>No orders yet.</p>
+              ) : (
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={statusData} dataKey="value" nameKey="name" innerRadius={50} outerRadius={85} paddingAngle={2}>
+                        {statusData.map((d) => (
+                          <Cell key={d.name} fill={d.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={chartTooltip} />
+                      <Legend wrapperStyle={{ fontSize: 12 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className={`rounded-[28px] border shadow-sm p-5 ${card}`}>
+              <div className="flex items-center gap-2 mb-4">
+                <span className="w-8 h-8 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 20V10m6 10V4m6 16v-7" />
+                  </svg>
+                </span>
+                <div>
+                  <h3 className="font-bold text-sm">Sales vs profit</h3>
+                  <p className={`text-[11px] ${muted}`}>Across time periods</p>
+                </div>
+              </div>
+              <div className="h-60">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={periodData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={chartGrid} vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: chartAxis }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: chartAxis }} axisLine={false} tickLine={false} tickFormatter={(v) => fmt(Number(v))} />
+                    <Tooltip contentStyle={chartTooltip} formatter={(v) => money(Number(v))} cursor={{ fill: dark ? "#1d2a23" : "#f3f4f6" }} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="sales" name="Sales" fill="#16a34a" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="profit" name="Profit" fill="#0891b2" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className={`rounded-[28px] border shadow-sm p-5 ${card}`}>
+              <div className="flex items-center gap-2 mb-4">
+                <span className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                  </svg>
+                </span>
+                <div>
+                  <h3 className="font-bold text-sm">Stock value by category</h3>
+                  <p className={`text-[11px] ${muted}`}>Top categories</p>
+                </div>
+              </div>
+              {categoryData.length === 0 ? (
+                <p className={`text-sm py-16 text-center ${muted}`}>No stock recorded yet.</p>
+              ) : (
+                <div className="h-60">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={categoryData} layout="vertical" margin={{ top: 4, right: 12, left: 8, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={chartGrid} horizontal={false} />
+                      <XAxis type="number" tick={{ fontSize: 11, fill: chartAxis }} axisLine={false} tickLine={false} tickFormatter={(v) => fmt(Number(v))} />
+                      <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 11, fill: chartAxis }} axisLine={false} tickLine={false} />
+                      <Tooltip contentStyle={chartTooltip} formatter={(v) => money(Number(v))} cursor={{ fill: dark ? "#1d2a23" : "#f3f4f6" }} />
+                      <Bar dataKey="value" name="Value" fill="#0d9488" radius={[0, 6, 6, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </div>
           </div>
 

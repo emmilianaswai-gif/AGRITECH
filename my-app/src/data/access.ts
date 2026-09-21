@@ -27,11 +27,11 @@ export const ACCESS_RATES: Record<Role, string> = {
 };
 
 export const ROLE_ACCESS: Record<Role, string[]> = {
-  FAMER: ["dashboard", "learning", "advice", "stores", "buy", "orders", "stock", "customer", "wallet", "messages", "exchange", "support", "access"],
-  CUSTOMER: ["dashboard", "learning", "advice", "stores", "buy", "orders", "stock", "customer", "wallet", "messages", "exchange", "support", "access"],
+  FAMER: ["dashboard", "learning", "advice", "stores", "buy", "orders", "report", "stock", "customer", "wallet", "messages", "exchange", "support", "access"],
+  CUSTOMER: ["dashboard", "learning", "advice", "stores", "buy", "orders", "report", "stock", "customer", "wallet", "messages", "exchange", "support", "access"],
   SUPPLIER: ["dashboard", "learning", "advice", "stores", "buy", "messages", "exchange", "support"],
-  ADMIN: ["dashboard", "learning", "advice", "stores", "buy", "orders", "stock", "customer", "wallet", "messages", "exchange", "support", "access"],
-  SUPER_ADMIN: ["dashboard", "learning", "advice", "stores", "buy", "orders", "stock", "customer", "wallet", "messages", "exchange", "support", "access"],
+  ADMIN: ["dashboard", "learning", "advice", "stores", "buy", "orders", "report", "stock", "customer", "wallet", "messages", "exchange", "support", "access"],
+  SUPER_ADMIN: ["dashboard", "learning", "advice", "stores", "buy", "orders", "report", "stock", "customer", "wallet", "messages", "exchange", "support", "access"],
 };
 
 export const DEFAULT_ROLE: Role = "FAMER";

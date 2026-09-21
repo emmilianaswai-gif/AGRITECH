@@ -2,6 +2,7 @@ import Navbar from "./components/Navbar";
 import AppSidebar from "./components/AppSidebar";
 import ServiceScreen from "./components/ServiceScreen";
 import MobileTabBar from "./components/MobileTabBar";
+import Footer from "./components/Footer";
 import GetStartedModal from "./components/GetStartedModal";
 import LoginScreen from "./components/LoginScreen";
 import FirstLoginChangePassword from "./components/FirstLoginChangePassword";
@@ -26,10 +27,11 @@ function Shell() {
       <Navbar />
       <div className="flex min-h-screen">
         <AppSidebar />
-        <main className="flex-1 min-w-0 pt-14 pb-24 md:pb-10 px-4 lg:px-8">
+        <main className="flex-1 min-w-0 pt-14 pb-32 md:pb-28 px-4 lg:px-8">
           <ServiceScreen />
         </main>
       </div>
+      <Footer />
       <MobileTabBar />
       <GetStartedModal />
     </div>
@@ -37,8 +39,8 @@ function Shell() {
 }
 
 function Gate() {
-  const { user, isGuest } = useUser();
-  if (!user && !isGuest) {
+  const { user } = useUser();
+  if (!user) {
     return (
       <>
         <LoginScreen />

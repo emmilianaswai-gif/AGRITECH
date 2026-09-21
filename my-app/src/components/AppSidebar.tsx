@@ -46,19 +46,15 @@ export default function AppSidebar() {
 
   const serviceBtn = (service: (typeof services)[number]) => {
     const isActive = active === service.id;
-    const allowed = canAccess(user?.role, service.id);
     return (
       <button
         key={service.id}
-        onClick={() => allowed && open(service.id)}
-        title={allowed ? service.label : `${service.label} (locked)`}
-        disabled={!allowed}
+        onClick={() => open(service.id)}
+        title={service.label}
         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-left transition-colors ${
           isActive
             ? "bg-green-800 text-white shadow-md shadow-green-800/20"
-            : allowed
-              ? "hover:bg-gray-100 dark:hover:bg-[#1d2a23]"
-              : "opacity-45 cursor-not-allowed"
+            : "hover:bg-gray-100 dark:hover:bg-[#1d2a23]"
         }`}
       >
         <div
@@ -76,11 +72,6 @@ export default function AppSidebar() {
             {service.description}
           </p>
         </div>
-        {!allowed && (
-          <svg className="w-4 h-4 flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-          </svg>
-        )}
       </button>
     );
   };
@@ -92,7 +83,7 @@ export default function AppSidebar() {
       }`}
       style={{ width: 288 }}
     >
-      <div className="sticky top-14 h-[calc(100dvh-3.5rem)] flex flex-col">
+      <div className="sticky top-14 h-[calc(100dvh-10.25rem)] md:h-[calc(100dvh-6.5rem)] flex flex-col">
         <div className="flex-1 overflow-y-auto py-4 px-3">
           <div className="px-3 pb-3">
             <p className="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">{t("menu")}</p>
@@ -104,7 +95,7 @@ export default function AppSidebar() {
             <p className="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">{t("services")}</p>
           </div>
           <nav className="space-y-1">
-            {services.map((service) => serviceBtn(service))}
+            {services.filter((s) => canAccess(user?.role, s.id)).map((service) => serviceBtn(service))}
           </nav>
         </div>
 
