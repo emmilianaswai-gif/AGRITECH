@@ -158,7 +158,7 @@ export default function Messages() {
           {t("login_hint")}
         </p>
         <button
-          onClick={openGetStarted}
+          onClick={() => openGetStarted()}
           className="px-6 py-2.5 bg-green-800 text-white font-semibold rounded-xl hover:bg-green-900"
         >
           {t("signup")} / {t("login")}

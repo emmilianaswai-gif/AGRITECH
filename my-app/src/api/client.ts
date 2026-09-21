@@ -32,15 +32,35 @@ export interface ProfileUpdateRequest {
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
+const STORAGE_KEY = "agriconnect_user";
+
+function currentUserId(): string | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { id?: string | null };
+    return parsed?.id || null;
+  } catch {
+    return null;
+  }
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const isFormData = options?.body instanceof FormData;
-  const res = await fetch(`${BASE_URL}${path}`, {
-    headers: isFormData
+  const headers = new Headers(
+    isFormData
       ? (options?.headers as HeadersInit) ?? {}
       : {
           "Content-Type": "application/json",
           ...(options?.headers ?? {}),
         },
+  );
+  const userId = currentUserId();
+  if (userId) {
+    headers.set("X-User-Id", userId);
+  }
+  const res = await fetch(`${BASE_URL}${path}`, {
+    headers,
     ...options,
   });
 
@@ -105,6 +125,9 @@ export const usersApi = {
       method: "POST",
       body: JSON.stringify({ identifier, password, role }),
     }),
+
+  logout: (): Promise<void> =>
+    request<void>("/users/logout", { method: "POST" }),
 
   getAll: (): Promise<UserResponse[]> =>
     request<UserResponse[]>("/users/all"),

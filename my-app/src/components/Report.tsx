@@ -186,7 +186,7 @@ export default function Report() {
                     <td className={`px-4 py-3 ${muted}`}>{o.customer}</td>
                     <td className={`px-4 py-3 ${muted}`}>{fmt(o.quantity ?? 0)} {o.unit}</td>
                     <td className="px-4 py-3 font-semibold text-amber-600 dark:text-amber-400">{money(o.total ?? 0)}</td>
-                    <td className={`px-4 py-3 ${muted}`}>{o.customerLocation || o.location || "—"}</td>
+                    <td className={`px-4 py-3 ${muted}`}>{o.customerLocation || "—"}</td>
                     <td className="px-4 py-3">
                       <span className="text-[10px] font-bold uppercase bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 rounded-full px-2.5 py-1">
                         Debt

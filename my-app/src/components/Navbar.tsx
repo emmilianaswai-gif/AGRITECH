@@ -131,13 +131,13 @@ export default function Navbar() {
           ) : (
             <>
               <button
-                onClick={openGetStarted}
+                onClick={() => openGetStarted()}
                 className="hidden sm:inline-flex items-center px-4 py-2 bg-green-800 text-white text-sm font-semibold rounded-xl hover:bg-green-900 transition-colors shadow-md shadow-green-800/20"
               >
                 {t("signup")}
               </button>
               <button
-                onClick={openGetStarted}
+                onClick={() => openGetStarted()}
                 className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
                   dark ? "bg-[#1d2a23] text-green-100 hover:bg-[#243429]" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
                 }`}

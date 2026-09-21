@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 import type { Role, UserResponse } from "../api/client";
+import { usersApi } from "../api/client";
 
 interface UserContextValue {
   user: UserResponse | null;
@@ -56,6 +57,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    try {
+      void usersApi.logout().catch(() => {});
+    } catch {
+      /* no-op */
+    }
     setUser(null);
     setIsGuest(false);
     localStorage.removeItem(STORAGE_KEY);
