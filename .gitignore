@@ -39,3 +39,6 @@ backend.err.log
 
 ### Uploads ###
 uploads/
+
+### Node ###
+node_modules/
