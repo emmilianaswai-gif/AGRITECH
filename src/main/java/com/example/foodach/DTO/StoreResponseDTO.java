@@ -11,6 +11,7 @@ public record StoreResponseDTO(
         String phone,
         String email,
         Double rating,
+        String ownerId,
         Instant createdAt
 ) {
 }

@@ -41,4 +41,7 @@ public class BuyItem {
 
     @Column(updatable = false)
     private Instant createdAt;
+
+    @Column(name = "owner_user_id")
+    private String ownerUserId;
 }

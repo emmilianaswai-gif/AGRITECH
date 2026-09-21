@@ -10,6 +10,8 @@ import java.util.List;
 public interface WalletTransactionRepository extends JpaRepository<WalletTransaction, Long> {
 
     List<WalletTransaction> findAllByOrderByCreatedAtDesc();
+    List<WalletTransaction> findByOwnerUserIdOrderByCreatedAtDesc(String ownerUserId);
+    List<WalletTransaction> findByOwnerUserId(String ownerUserId);
 
     boolean existsByOrderIdAndDirection(Long orderId, String direction);
 

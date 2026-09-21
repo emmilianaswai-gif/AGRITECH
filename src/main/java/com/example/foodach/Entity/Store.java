@@ -23,6 +23,8 @@ public class Store {
     @Column(nullable = false)
     private String name;
 
+    private String ownerId;
+
     private String category;
 
     private String location;

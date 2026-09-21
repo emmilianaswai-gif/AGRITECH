@@ -1,5 +1,6 @@
 package com.example.foodach.ServiceImpl;
 
+import com.example.foodach.Config.TenantContext;
 import com.example.foodach.DTO.CollectionRequestDTO;
 import com.example.foodach.DTO.CustomerOrderRequestDTO;
 import com.example.foodach.DTO.CustomerOrderResponseDTO;
@@ -29,6 +30,14 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
     private final CustomerOrderRepository orderRepository;
     private final InventoryItemRepository inventoryRepository;
     private final WalletService walletService;
+
+    private String requireOwnerId() {
+        String ownerId = TenantContext.get();
+        if (ownerId == null || ownerId.isBlank()) {
+            throw new RuntimeException("User identity is required");
+        }
+        return ownerId;
+    }
 
     private boolean countsAsSale(CustomerOrder o) {
         String s = o.getStatus();
@@ -68,6 +77,8 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
     @Override
     @Transactional
     public CustomerOrderResponseDTO addOrder(CustomerOrderRequestDTO requestDTO) {
+        String sellerId = requireOwnerId();
+
         if (requestDTO.inventoryItemId() == null) {
             throw new IllegalArgumentException("Inventory item is required");
         }
@@ -80,6 +91,9 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
 
         InventoryItem item = inventoryRepository.findById(requestDTO.inventoryItemId())
                 .orElseThrow(() -> new RuntimeException("Inventory item not found"));
+        if (!sellerId.equals(item.getOwnerUserId())) {
+            throw new RuntimeException("Inventory item not found");
+        }
 
         double available = item.getQuantity() == null ? 0.0 : item.getQuantity();
         if (requestDTO.quantity() > available) {
@@ -107,7 +121,7 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
         order.setItemTitle(item.getTitle());
         order.setCustomer(requestDTO.customer().trim());
         order.setCustomerUserId(requestDTO.customerUserId());
-        order.setSellerUserId(requestDTO.sellerUserId());
+        order.setSellerUserId(sellerId);
         order.setQuantity(requestDTO.quantity());
         order.setUnit(item.getUnit());
         order.setUnitPrice(unitPrice);
@@ -155,16 +169,21 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
 
     @Override
     public List<CustomerOrderResponseDTO> getAllOrders() {
-        return orderRepository.findAll().stream()
+        String ownerId = requireOwnerId();
+        return orderRepository.findBySellerUserId(ownerId).stream()
                 .map(this::mapToResponseDTO)
                 .collect(Collectors.toList());
     }
 
     @Override
     public CustomerOrderResponseDTO getOrderById(Long id) {
-        return orderRepository.findById(id)
-                .map(this::mapToResponseDTO)
+        CustomerOrder order = orderRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Order not found"));
+        String ownerId = requireOwnerId();
+        if (!ownerId.equals(order.getSellerUserId())) {
+            throw new RuntimeException("Order not found");
+        }
+        return mapToResponseDTO(order);
     }
 
     @Override
@@ -172,6 +191,10 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
     public void deleteOrder(Long id) {
         CustomerOrder order = orderRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Order not found"));
+        String ownerId = requireOwnerId();
+        if (!ownerId.equals(order.getSellerUserId())) {
+            throw new RuntimeException("Order not found");
+        }
 
         if (holdsStock(order)) {
             InventoryItem item = inventoryRepository.findById(order.getInventoryItemId()).orElse(null);
@@ -186,14 +209,15 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
 
     @Override
     public InventoryTotalsDTO getProfitSummary() {
-        List<InventoryItem> inventory = inventoryRepository.findAll();
+        String ownerId = requireOwnerId();
+        List<InventoryItem> inventory = inventoryRepository.findByOwnerUserId(ownerId);
         long inventoryCount = inventory.size();
         double inventoryValue = inventory.stream()
                 .mapToDouble(item -> (item.getQuantity() == null ? 0.0 : item.getQuantity())
                         * (item.getSellingPrice() == null ? 0.0 : item.getSellingPrice()))
                 .sum();
 
-        List<CustomerOrder> orders = orderRepository.findAll();
+        List<CustomerOrder> orders = orderRepository.findBySellerUserId(ownerId);
         long orderCount = orders.size();
         double totalSales = orders.stream()
                 .filter(this::countsAsSale)
@@ -213,7 +237,8 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
 
     @Override
     public TradingStatsDTO getTradingStats() {
-        List<CustomerOrder> orders = orderRepository.findAll();
+        String ownerId = requireOwnerId();
+        List<CustomerOrder> orders = orderRepository.findBySellerUserId(ownerId);
         ZoneId zone = ZoneId.systemDefault();
         LocalDate today = LocalDate.now(zone);
         ZonedDateTime startOfToday = today.atStartOfDay(zone);
@@ -292,6 +317,10 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
     public CustomerOrderResponseDTO collectDebt(Long id, CollectionRequestDTO requestDTO) {
         CustomerOrder order = orderRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Order not found"));
+        String ownerId = requireOwnerId();
+        if (!ownerId.equals(order.getSellerUserId())) {
+            throw new RuntimeException("Order not found");
+        }
         String current = order.getPaymentMethod() == null ? order.getStatus() : order.getPaymentMethod();
         if (!"Credit".equalsIgnoreCase(current)) {
             throw new IllegalArgumentException("This order is not an outstanding debt");
@@ -315,6 +344,10 @@ public class CustomerOrderServiceImpl implements CustomerOrderService {
     public CustomerOrderResponseDTO updateOrderStatus(Long id, String status) {
         CustomerOrder order = orderRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Order not found"));
+        String ownerId = requireOwnerId();
+        if (!ownerId.equals(order.getSellerUserId())) {
+            throw new RuntimeException("Order not found");
+        }
 
         String current = order.getStatus();
         if ("Credit".equalsIgnoreCase(current)) {

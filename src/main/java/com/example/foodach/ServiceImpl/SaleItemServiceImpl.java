@@ -1,5 +1,6 @@
 package com.example.foodach.ServiceImpl;
 
+import com.example.foodach.Config.TenantContext;
 import com.example.foodach.DTO.SaleItemRequestDTO;
 import com.example.foodach.DTO.SaleItemResponseDTO;
 import com.example.foodach.Entity.SaleItem;
@@ -24,6 +25,11 @@ public class SaleItemServiceImpl implements SaleItemService {
             throw new IllegalArgumentException("Title is required");
         }
 
+        String ownerId = TenantContext.get();
+        if (ownerId == null || ownerId.isBlank()) {
+            throw new RuntimeException("User identity is required");
+        }
+
         SaleItem item = new SaleItem();
         item.setTitle(requestDTO.title());
         item.setCategory(requestDTO.category());
@@ -35,27 +41,39 @@ public class SaleItemServiceImpl implements SaleItemService {
         item.setFeePercent(requestDTO.feePercent() == null ? 5.0 : requestDTO.feePercent());
         item.setStatus(requestDTO.status() == null ? "Available" : requestDTO.status());
         item.setCreatedAt(Instant.now());
+        item.setOwnerUserId(ownerId);
 
         return mapToResponseDTO(repository.save(item));
     }
 
     @Override
     public List<SaleItemResponseDTO> getAllItems() {
-        return repository.findAll().stream()
+        String ownerId = TenantContext.get();
+        if (ownerId == null || ownerId.isBlank()) {
+            throw new RuntimeException("User identity is required");
+        }
+        return repository.findByOwnerUserId(ownerId).stream()
                 .map(this::mapToResponseDTO)
                 .collect(Collectors.toList());
     }
 
     @Override
     public SaleItemResponseDTO getItemById(Long id) {
-        return repository.findById(id)
-                .map(this::mapToResponseDTO)
+        SaleItem item = repository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Sale item not found"));
+        String ownerId = TenantContext.get();
+        if (ownerId != null && !ownerId.isBlank() && !ownerId.equals(item.getOwnerUserId())) {
+            throw new RuntimeException("Sale item not found");
+        }
+        return mapToResponseDTO(item);
     }
 
     @Override
     public void deleteItem(Long id) {
-        if (!repository.existsById(id)) {
+        SaleItem item = repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Sale item not found"));
+        String ownerId = TenantContext.get();
+        if (ownerId != null && !ownerId.isBlank() && !ownerId.equals(item.getOwnerUserId())) {
             throw new RuntimeException("Sale item not found");
         }
         repository.deleteById(id);

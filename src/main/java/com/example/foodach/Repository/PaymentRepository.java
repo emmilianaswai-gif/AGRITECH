@@ -10,5 +10,6 @@ import java.util.Optional;
 @Repository
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
     Optional<Payment> findByReference(String reference);
+    List<Payment> findByOwnerUserIdOrderByCreatedAtDesc(String ownerUserId);
     List<Payment> findAllByOrderByCreatedAtDesc();
 }

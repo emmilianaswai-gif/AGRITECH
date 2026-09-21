@@ -9,6 +9,7 @@ import java.util.List;
 public interface UserService {
     UserResponseDTO registerUser(UserRequestDTO userRequestDTO);
     UserResponseDTO loginUser(String identifier, String password, String requestedRole);
+    void logout(String userId);
     UserResponseDTO enrollMember(UserRequestDTO userRequestDTO, String actorRole);
     UserResponseDTO changePasswordOnFirstLogin(String identifier, String oldPassword, String newPassword);
     UserResponseDTO getUserById(String id);

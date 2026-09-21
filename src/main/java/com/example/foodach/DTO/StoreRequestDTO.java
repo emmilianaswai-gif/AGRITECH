@@ -9,6 +9,9 @@ public record StoreRequestDTO(
         String description,
         String phone,
         String email,
-        Double rating
+        Double rating,
+        String ownerName,
+        String ownerPassword,
+        String ownerAddress
 ) {
 }

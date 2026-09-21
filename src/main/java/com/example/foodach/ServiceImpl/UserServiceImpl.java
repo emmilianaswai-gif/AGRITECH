@@ -21,6 +21,9 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserResponseDTO registerUser(UserRequestDTO requestDTO) {
+        if ("FAMER".equals(parseRole(requestDTO.role())))
+            throw new RuntimeException("Farmer accounts are created together with your agro store. Please register a store instead");
+
         if (userRepository.existsByPhoneNumber(requestDTO.phoneNumber()))
             throw new RuntimeException("This number already registered");
         if (requestDTO.email() != null && !requestDTO.email().isBlank()
@@ -137,6 +140,15 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public void logout(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return;
+        }
+        userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Account not found"));
+    }
+
+    @Override
     public UserResponseDTO getUserById(String id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -197,7 +209,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public UserResponseDTO getAllUsers() {
+    public List<UserResponseDTO> getAllUsers() {
         return userRepository.findAll().stream()
                 .map(this::mapToResponseDTO)
                 .toList();

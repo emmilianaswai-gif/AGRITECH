@@ -1,5 +1,6 @@
 package com.example.foodach.ServiceImpl;
 
+import com.example.foodach.Config.TenantContext;
 import com.example.foodach.DTO.PaymentResponseDTO;
 import com.example.foodach.DTO.WalletSummaryDTO;
 import com.example.foodach.Entity.Payment;
@@ -30,10 +31,19 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentRepository paymentRepository;
     private final WalletService walletService;
 
+    private String requireOwnerId() {
+        String ownerId = TenantContext.get();
+        if (ownerId == null || ownerId.isBlank()) {
+            throw new RuntimeException("User identity is required");
+        }
+        return ownerId;
+    }
+
     @Override
     @Transactional
     public PaymentResponseDTO deposit(Double amount, String provider, String phone,
                                       String accountNumber, String accountName) {
+        String ownerId = requireOwnerId();
         validateRequest(amount, provider, phone, accountNumber, accountName);
         Payment payment = new Payment();
         payment.setReference(generateReference());
@@ -44,6 +54,7 @@ public class PaymentServiceImpl implements PaymentService {
         payment.setStatus("PENDING");
         payment.setNote("Waiting for confirmation");
         payment.setCreatedAt(Instant.now());
+        payment.setOwnerUserId(ownerId);
         return toDTO(paymentRepository.save(payment));
     }
 
@@ -51,6 +62,7 @@ public class PaymentServiceImpl implements PaymentService {
     @Transactional
     public PaymentResponseDTO payout(Double amount, String provider, String phone,
                                      String accountNumber, String accountName) {
+        String ownerId = requireOwnerId();
         validateRequest(amount, provider, phone, accountNumber, accountName);
         WalletSummaryDTO summary = walletService.getSummary();
         if (amount > summary.balance()) {
@@ -65,6 +77,7 @@ public class PaymentServiceImpl implements PaymentService {
         payment.setStatus("PENDING");
         payment.setNote("Waiting for confirmation");
         payment.setCreatedAt(Instant.now());
+        payment.setOwnerUserId(ownerId);
         return toDTO(paymentRepository.save(payment));
     }
 
@@ -72,6 +85,10 @@ public class PaymentServiceImpl implements PaymentService {
     @Transactional
     public PaymentResponseDTO confirm(String reference) {
         Payment payment = findPayment(reference);
+        String ownerId = requireOwnerId();
+        if (!ownerId.equals(payment.getOwnerUserId())) {
+            throw new IllegalArgumentException("Payment not found for that reference");
+        }
         if ("COMPLETED".equals(payment.getStatus())) {
             return toDTO(payment);
         }
@@ -98,6 +115,10 @@ public class PaymentServiceImpl implements PaymentService {
     @Transactional
     public PaymentResponseDTO cancel(String reference) {
         Payment payment = findPayment(reference);
+        String ownerId = requireOwnerId();
+        if (!ownerId.equals(payment.getOwnerUserId())) {
+            throw new IllegalArgumentException("Payment not found for that reference");
+        }
         if (!"PENDING".equals(payment.getStatus())) {
             throw new IllegalArgumentException("Only pending payments can be cancelled");
         }
@@ -111,7 +132,8 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     @Transactional(readOnly = true)
     public List<PaymentResponseDTO> list() {
-        return paymentRepository.findAllByOrderByCreatedAtDesc().stream()
+        String ownerId = requireOwnerId();
+        return paymentRepository.findByOwnerUserIdOrderByCreatedAtDesc(ownerId).stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
     }

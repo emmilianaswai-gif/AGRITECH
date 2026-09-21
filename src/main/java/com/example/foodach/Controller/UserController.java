@@ -34,6 +34,12 @@ public class UserController {
         return ResponseEntity.ok(user);
     }
 
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logoutUser(@RequestHeader(value = "X-User-Id", required = false) String userId) {
+        userService.logout(userId);
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/enroll")
     public ResponseEntity<UserResponseDTO> enrollMember(
             @RequestBody UserRequestDTO requestDTO,

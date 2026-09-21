@@ -48,4 +48,7 @@ public class Payment {
     private Instant createdAt;
 
     private Instant completedAt;
+
+    @Column(name = "owner_user_id")
+    private String ownerUserId;
 }
