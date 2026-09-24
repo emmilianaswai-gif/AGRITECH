@@ -33,6 +33,7 @@ export interface ProfileUpdateRequest {
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 const STORAGE_KEY = "agriconnect_user";
+const STORE_KEY = "agriconnect_active_store";
 
 function currentUserId(): string | null {
   try {
@@ -40,6 +41,18 @@ function currentUserId(): string | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { id?: string | null };
     return parsed?.id || null;
+  } catch {
+    return null;
+  }
+}
+
+function currentStoreId(): string | null {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { id?: number | null };
+    const id = typeof parsed?.id === "number" ? parsed.id : null;
+    return id != null ? String(id) : null;
   } catch {
     return null;
   }
@@ -55,9 +68,13 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
           ...(options?.headers ?? {}),
         },
   );
-  const userId = currentUserId();
+  const userId = headers.get("X-User-Id") ?? currentUserId();
   if (userId) {
     headers.set("X-User-Id", userId);
+  }
+  const storeId = currentStoreId();
+  if (storeId) {
+    headers.set("X-Store-Id", storeId);
   }
   const res = await fetch(`${BASE_URL}${path}`, {
     headers,
@@ -65,7 +82,14 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
 
   if (!res.ok) {
-    const message = await res.text().catch(() => res.statusText);
+    const raw = await res.text().catch(() => res.statusText);
+    let message = raw || res.statusText;
+    try {
+      const parsed = JSON.parse(raw) as { error?: string; message?: string };
+      message = parsed.error ?? parsed.message ?? raw;
+    } catch {
+      // not JSON, keep raw text
+    }
     throw new Error(`Request failed (${res.status}): ${message}`);
   }
 
@@ -444,6 +468,13 @@ export type StoreRequest = Omit<Store, "id" | "createdAt">;
 
 export const storeApi = {
   getAll: (): Promise<Store[]> => request<Store[]>("/stores"),
+
+  getMine: (userId?: string): Promise<Store[]> => {
+    const id = userId && userId.length > 0 ? userId : undefined;
+    return request<Store[]>("/stores/mine", {
+      headers: id ? { "X-User-Id": id } : {},
+    });
+  },
 
   getById: (id: number): Promise<Store> => request<Store>(`/stores/${id}`),
 

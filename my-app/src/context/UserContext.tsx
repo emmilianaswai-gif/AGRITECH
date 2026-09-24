@@ -1,20 +1,25 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
-import type { Role, UserResponse } from "../api/client";
+import type { Role, Store, UserResponse } from "../api/client";
 import { usersApi } from "../api/client";
 
 interface UserContextValue {
   user: UserResponse | null;
-  login: (user: UserResponse) => void;
+  activeStore: Store | null;
+  login: (user: UserResponse, store?: Store | null) => void;
+  setActiveStore: (store: Store | null) => void;
   logout: () => void;
 }
 
 const UserContext = createContext<UserContextValue>({
   user: null,
+  activeStore: null,
   login: () => {},
+  setActiveStore: () => {},
   logout: () => {},
 });
 
 const STORAGE_KEY = "agriconnect_user";
+const STORE_KEY = "agriconnect_active_store";
 
 function loadUser(): UserResponse | null {
   try {
@@ -25,12 +30,36 @@ function loadUser(): UserResponse | null {
   }
 }
 
+function loadStore(): Store | null {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    return raw ? (JSON.parse(raw) as Store) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserResponse | null>(loadUser);
+  const [activeStore, setActiveStoreState] = useState<Store | null>(loadStore);
 
-  const login = (u: UserResponse) => {
+  const setActiveStore = (store: Store | null) => {
+    setActiveStoreState(store);
+    try {
+      if (store) {
+        localStorage.setItem(STORE_KEY, JSON.stringify(store));
+      } else {
+        localStorage.removeItem(STORE_KEY);
+      }
+    } catch {
+      /* no-op */
+    }
+  };
+
+  const login = (u: UserResponse, store?: Store | null) => {
     setUser(u);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
+    setActiveStore(store ?? null);
   };
 
   const logout = () => {
@@ -41,10 +70,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
     setUser(null);
     localStorage.removeItem(STORAGE_KEY);
+    setActiveStore(null);
   };
 
   return (
-    <UserContext.Provider value={{ user, login, logout }}>
+    <UserContext.Provider value={{ user, activeStore, login, setActiveStore, logout }}>
       {children}
     </UserContext.Provider>
   );
