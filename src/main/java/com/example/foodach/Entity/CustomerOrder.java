@@ -67,4 +67,7 @@ public class CustomerOrder {
 
     @Column(updatable = false)
     private Instant createdAt;
+
+    @Column(name = "store_id")
+    private Long storeId;
 }

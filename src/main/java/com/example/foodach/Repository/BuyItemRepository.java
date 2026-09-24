@@ -9,4 +9,5 @@ import java.util.List;
 @Repository
 public interface BuyItemRepository extends JpaRepository<BuyItem, Long> {
     List<BuyItem> findByOwnerUserId(String ownerUserId);
+    List<BuyItem> findByStoreId(Long storeId);
 }

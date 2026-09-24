@@ -48,4 +48,7 @@ public class SaleItem {
 
     @Column(name = "owner_user_id")
     private String ownerUserId;
+
+    @Column(name = "store_id")
+    private Long storeId;
 }

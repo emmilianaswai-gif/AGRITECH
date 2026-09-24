@@ -12,7 +12,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -39,6 +42,33 @@ public class PaymentServiceImpl implements PaymentService {
         return ownerId;
     }
 
+    private List<Payment> scopedPayments(String ownerId) {
+        Long storeId = TenantContext.getStoreId();
+        if (storeId != null) {
+            Map<Long, Payment> merged = new LinkedHashMap<>();
+            for (Payment p : paymentRepository.findByStoreIdOrderByCreatedAtDesc(storeId)) {
+                merged.put(p.getId(), p);
+            }
+            for (Payment p : paymentRepository.findByOwnerUserIdOrderByCreatedAtDesc(ownerId)) {
+                if (p.getStoreId() == null) {
+                    merged.putIfAbsent(p.getId(), p);
+                }
+            }
+            return merged.values().stream()
+                    .sorted(Comparator.comparing(Payment::getCreatedAt,
+                            Comparator.nullsLast(Comparator.reverseOrder())))
+                    .collect(Collectors.toList());
+        }
+        return paymentRepository.findByOwnerUserIdOrderByCreatedAtDesc(ownerId);
+    }
+
+    private void requireStoreScope(Payment payment) {
+        Long storeId = TenantContext.getStoreId();
+        if (storeId != null && payment.getStoreId() != null && !storeId.equals(payment.getStoreId())) {
+            throw new IllegalArgumentException("Payment not found for that reference");
+        }
+    }
+
     @Override
     @Transactional
     public PaymentResponseDTO deposit(Double amount, String provider, String phone,
@@ -55,6 +85,7 @@ public class PaymentServiceImpl implements PaymentService {
         payment.setNote("Waiting for confirmation");
         payment.setCreatedAt(Instant.now());
         payment.setOwnerUserId(ownerId);
+        payment.setStoreId(TenantContext.getStoreId());
         return toDTO(paymentRepository.save(payment));
     }
 
@@ -78,6 +109,7 @@ public class PaymentServiceImpl implements PaymentService {
         payment.setNote("Waiting for confirmation");
         payment.setCreatedAt(Instant.now());
         payment.setOwnerUserId(ownerId);
+        payment.setStoreId(TenantContext.getStoreId());
         return toDTO(paymentRepository.save(payment));
     }
 
@@ -89,6 +121,7 @@ public class PaymentServiceImpl implements PaymentService {
         if (!ownerId.equals(payment.getOwnerUserId())) {
             throw new IllegalArgumentException("Payment not found for that reference");
         }
+        requireStoreScope(payment);
         if ("COMPLETED".equals(payment.getStatus())) {
             return toDTO(payment);
         }
@@ -119,6 +152,7 @@ public class PaymentServiceImpl implements PaymentService {
         if (!ownerId.equals(payment.getOwnerUserId())) {
             throw new IllegalArgumentException("Payment not found for that reference");
         }
+        requireStoreScope(payment);
         if (!"PENDING".equals(payment.getStatus())) {
             throw new IllegalArgumentException("Only pending payments can be cancelled");
         }
@@ -133,7 +167,7 @@ public class PaymentServiceImpl implements PaymentService {
     @Transactional(readOnly = true)
     public List<PaymentResponseDTO> list() {
         String ownerId = requireOwnerId();
-        return paymentRepository.findByOwnerUserIdOrderByCreatedAtDesc(ownerId).stream()
+        return scopedPayments(ownerId).stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
     }

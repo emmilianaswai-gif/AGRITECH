@@ -42,27 +42,50 @@ public class SaleItemServiceImpl implements SaleItemService {
         item.setStatus(requestDTO.status() == null ? "Available" : requestDTO.status());
         item.setCreatedAt(Instant.now());
         item.setOwnerUserId(ownerId);
+        item.setStoreId(TenantContext.getStoreId());
 
         return mapToResponseDTO(repository.save(item));
     }
 
     @Override
     public List<SaleItemResponseDTO> getAllItems() {
-        String ownerId = TenantContext.get();
-        if (ownerId == null || ownerId.isBlank()) {
-            throw new RuntimeException("User identity is required");
-        }
-        return repository.findByOwnerUserId(ownerId).stream()
+        String ownerId = requireOwnerId();
+        List<SaleItem> items = scopedItems(ownerId);
+        return items.stream()
                 .map(this::mapToResponseDTO)
                 .collect(Collectors.toList());
+    }
+
+    private List<SaleItem> scopedItems(String ownerId) {
+        Long storeId = TenantContext.getStoreId();
+        if (storeId != null) {
+            List<SaleItem> byStore = repository.findByStoreId(storeId);
+            List<SaleItem> byOwner = repository.findByOwnerUserId(ownerId);
+            byStore.addAll(byOwner.stream()
+                    .filter(item -> item.getStoreId() == null)
+                    .toList());
+            return byStore;
+        }
+        return repository.findByOwnerUserId(ownerId);
+    }
+
+    private boolean hasAccess(SaleItem item) {
+        String ownerId = TenantContext.get();
+        if (ownerId == null || !ownerId.equals(item.getOwnerUserId())) {
+            return false;
+        }
+        Long storeId = TenantContext.getStoreId();
+        if (storeId != null && item.getStoreId() != null) {
+            return storeId.equals(item.getStoreId());
+        }
+        return true;
     }
 
     @Override
     public SaleItemResponseDTO getItemById(Long id) {
         SaleItem item = repository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Sale item not found"));
-        String ownerId = TenantContext.get();
-        if (ownerId != null && !ownerId.isBlank() && !ownerId.equals(item.getOwnerUserId())) {
+        if (!hasAccess(item)) {
             throw new RuntimeException("Sale item not found");
         }
         return mapToResponseDTO(item);
@@ -72,11 +95,18 @@ public class SaleItemServiceImpl implements SaleItemService {
     public void deleteItem(Long id) {
         SaleItem item = repository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Sale item not found"));
-        String ownerId = TenantContext.get();
-        if (ownerId != null && !ownerId.isBlank() && !ownerId.equals(item.getOwnerUserId())) {
+        if (!hasAccess(item)) {
             throw new RuntimeException("Sale item not found");
         }
         repository.deleteById(id);
+    }
+
+    private String requireOwnerId() {
+        String ownerId = TenantContext.get();
+        if (ownerId == null || ownerId.isBlank()) {
+            throw new RuntimeException("User identity is required");
+        }
+        return ownerId;
     }
 
     private SaleItemResponseDTO mapToResponseDTO(SaleItem item) {

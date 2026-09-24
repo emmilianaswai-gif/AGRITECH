@@ -11,7 +11,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -28,11 +31,31 @@ public class WalletServiceImpl implements WalletService {
         return ownerId;
     }
 
+    private List<WalletTransaction> scopedTransactions(String ownerId) {
+        Long storeId = TenantContext.getStoreId();
+        if (storeId != null) {
+            Map<Long, WalletTransaction> merged = new LinkedHashMap<>();
+            for (WalletTransaction t : repository.findByStoreId(storeId)) {
+                merged.put(t.getId(), t);
+            }
+            for (WalletTransaction t : repository.findByOwnerUserId(ownerId)) {
+                if (t.getStoreId() == null) {
+                    merged.putIfAbsent(t.getId(), t);
+                }
+            }
+            return merged.values().stream()
+                    .sorted(Comparator.comparing(WalletTransaction::getCreatedAt,
+                            Comparator.nullsLast(Comparator.reverseOrder())))
+                    .collect(Collectors.toList());
+        }
+        return repository.findByOwnerUserIdOrderByCreatedAtDesc(ownerId);
+    }
+
     @Override
     @Transactional(readOnly = true)
     public List<WalletTransactionDTO> getTransactions() {
         String ownerId = requireOwnerId();
-        return repository.findByOwnerUserIdOrderByCreatedAtDesc(ownerId).stream()
+        return scopedTransactions(ownerId).stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
     }
@@ -41,7 +64,7 @@ public class WalletServiceImpl implements WalletService {
     @Transactional(readOnly = true)
     public WalletSummaryDTO getSummary() {
         String ownerId = requireOwnerId();
-        List<WalletTransaction> all = repository.findByOwnerUserId(ownerId);
+        List<WalletTransaction> all = scopedTransactions(ownerId);
         double moneyIn = 0, moneyOut = 0;
         for (WalletTransaction t : all) {
             double amount = t.getAmount() == null ? 0.0 : t.getAmount();
@@ -74,6 +97,7 @@ public class WalletServiceImpl implements WalletService {
         t.setOrderId(orderId);
         t.setCreatedAt(Instant.now());
         t.setOwnerUserId(ownerId);
+        t.setStoreId(TenantContext.getStoreId());
         repository.save(t);
     }
 
@@ -89,6 +113,7 @@ public class WalletServiceImpl implements WalletService {
         t.setOrderId(orderId);
         t.setCreatedAt(Instant.now());
         t.setOwnerUserId(ownerId);
+        t.setStoreId(TenantContext.getStoreId());
         repository.save(t);
     }
 
@@ -115,6 +140,7 @@ public class WalletServiceImpl implements WalletService {
         t.setAmount(Math.round(amount * 100.0) / 100.0);
         t.setCreatedAt(Instant.now());
         t.setOwnerUserId(ownerId);
+        t.setStoreId(TenantContext.getStoreId());
         repository.save(t);
     }
 
@@ -133,6 +159,7 @@ public class WalletServiceImpl implements WalletService {
         t.setAmount(Math.round(amount * 100.0) / 100.0);
         t.setCreatedAt(Instant.now());
         t.setOwnerUserId(ownerId);
+        t.setStoreId(TenantContext.getStoreId());
         repository.save(t);
     }
 
@@ -155,6 +182,7 @@ public class WalletServiceImpl implements WalletService {
         t.setAmount(Math.round(amount * 100.0) / 100.0);
         t.setCreatedAt(Instant.now());
         t.setOwnerUserId(ownerId);
+        t.setStoreId(TenantContext.getStoreId());
         return toDTO(repository.save(t));
     }
 

@@ -25,10 +25,10 @@ public class UserServiceImpl implements UserService {
             throw new RuntimeException("Farmer accounts are created together with your agro store. Please register a store instead");
 
         if (userRepository.existsByPhoneNumber(requestDTO.phoneNumber()))
-            throw new RuntimeException("This number already registered");
+            throw new IllegalArgumentException("This number already registered");
         if (requestDTO.email() != null && !requestDTO.email().isBlank()
                 && userRepository.existsByEmailIgnoreCase(requestDTO.email()))
-            throw new RuntimeException("This email already registered");
+            throw new IllegalArgumentException("This email already registered");
 
         User user = new User();
         user.setFullName(requestDTO.fullName());
@@ -51,10 +51,10 @@ public class UserServiceImpl implements UserService {
             throw new RuntimeException("Only farmers and admins can enroll members");
 
         if (userRepository.existsByPhoneNumber(requestDTO.phoneNumber()))
-            throw new RuntimeException("This number already registered");
+            throw new IllegalArgumentException("This number already registered");
         if (requestDTO.email() != null && !requestDTO.email().isBlank()
                 && userRepository.existsByEmailIgnoreCase(requestDTO.email()))
-            throw new RuntimeException("This email already registered");
+            throw new IllegalArgumentException("This email already registered");
         if (requestDTO.password() == null || requestDTO.password().isBlank())
             throw new RuntimeException("An initial password is required");
 
@@ -186,7 +186,7 @@ public class UserServiceImpl implements UserService {
         String phone = requestDTO.phoneNumber().trim();
         userRepository.findByPhoneNumber(phone).filter(u -> !u.getUuid().equals(user.getUuid()))
                 .ifPresent(u -> {
-                    throw new RuntimeException("This number is already registered to another account");
+                    throw new IllegalArgumentException("This number is already registered to another account");
                 });
 
         String email = requestDTO.email() == null ? null : requestDTO.email().trim();
@@ -195,7 +195,7 @@ public class UserServiceImpl implements UserService {
                     .filter(u -> !u.getUuid().equals(user.getUuid()))
                     .findFirst()
                     .ifPresent(u -> {
-                        throw new RuntimeException("This email is already registered to another account");
+                        throw new IllegalArgumentException("This email is already registered to another account");
                     });
         }
 

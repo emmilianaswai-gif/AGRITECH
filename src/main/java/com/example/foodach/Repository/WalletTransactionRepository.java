@@ -12,6 +12,8 @@ public interface WalletTransactionRepository extends JpaRepository<WalletTransac
     List<WalletTransaction> findAllByOrderByCreatedAtDesc();
     List<WalletTransaction> findByOwnerUserIdOrderByCreatedAtDesc(String ownerUserId);
     List<WalletTransaction> findByOwnerUserId(String ownerUserId);
+    List<WalletTransaction> findByStoreIdOrderByCreatedAtDesc(Long storeId);
+    List<WalletTransaction> findByStoreId(Long storeId);
 
     boolean existsByOrderIdAndDirection(Long orderId, String direction);
 

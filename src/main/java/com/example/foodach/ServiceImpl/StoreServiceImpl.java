@@ -1,5 +1,6 @@
 package com.example.foodach.ServiceImpl;
 
+import com.example.foodach.Config.TenantContext;
 import com.example.foodach.DTO.StoreRequestDTO;
 import com.example.foodach.DTO.StoreResponseDTO;
 import com.example.foodach.Entity.Role;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,6 +31,44 @@ public class StoreServiceImpl implements StoreService {
         if (requestDTO.name() == null || requestDTO.name().isBlank()) {
             throw new IllegalArgumentException("Store name is required");
         }
+
+        String currentUserId = TenantContext.get();
+        if (currentUserId != null && !currentUserId.isBlank()) {
+            return addStoreForCurrentUser(requestDTO, currentUserId);
+        }
+        return addStoreLegacy(requestDTO);
+    }
+
+    private StoreResponseDTO addStoreForCurrentUser(StoreRequestDTO requestDTO, String currentUserId) {
+        if (requestDTO.phone() != null && !requestDTO.phone().isBlank()
+                && userRepository.existsByPhoneNumber(requestDTO.phone())) {
+            throw new RuntimeException("This phone number is already registered to another account");
+        }
+
+        User owner = userRepository.findById(currentUserId).orElse(null);
+        if (owner == null) {
+            throw new RuntimeException("User identity is required");
+        }
+        if ("CUSTOMER".equalsIgnoreCase(owner.getRole())) {
+            owner.setRole(Role.FAMER.name());
+            userRepository.save(owner);
+        }
+
+        Store store = new Store();
+        store.setName(requestDTO.name().trim());
+        store.setOwnerId(currentUserId);
+        store.setCategory(requestDTO.category());
+        store.setLocation(requestDTO.location());
+        store.setDescription(requestDTO.description());
+        store.setPhone(requestDTO.phone());
+        store.setEmail(requestDTO.email());
+        store.setRating(requestDTO.rating());
+        store.setCreatedAt(Instant.now());
+
+        return mapToResponseDTO(repository.save(store));
+    }
+
+    private StoreResponseDTO addStoreLegacy(StoreRequestDTO requestDTO) {
         if (requestDTO.ownerName() == null || requestDTO.ownerName().isBlank()) {
             throw new IllegalArgumentException("Owner name is required");
         }
@@ -68,6 +108,17 @@ public class StoreServiceImpl implements StoreService {
     }
 
     @Override
+    public List<StoreResponseDTO> getMyStores() {
+        String currentUserId = TenantContext.get();
+        if (currentUserId == null || currentUserId.isBlank()) {
+            throw new IllegalArgumentException("User identity is required");
+        }
+        return repository.findByOwnerId(currentUserId).stream()
+                .map(this::mapToResponseDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
     public List<StoreResponseDTO> getAllStores() {
         return repository.findAll().stream()
                 .map(this::mapToResponseDTO)
@@ -83,10 +134,21 @@ public class StoreServiceImpl implements StoreService {
 
     @Override
     public void deleteStore(Long id) {
-        if (!repository.existsById(id)) {
+        String currentUserId = TenantContext.get();
+        Store store = repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Store not found"));
+        boolean owner = currentUserId != null && currentUserId.equals(store.getOwnerId());
+        boolean admin = currentUserId != null && isAdmin(currentUserId);
+        if (!owner && !admin) {
             throw new RuntimeException("Store not found");
         }
         repository.deleteById(id);
+    }
+
+    private boolean isAdmin(String userId) {
+        Optional<User> user = userRepository.findById(userId);
+        return user.isPresent() && ("ADMIN".equalsIgnoreCase(user.get().getRole())
+                || "SUPER_ADMIN".equalsIgnoreCase(user.get().getRole()));
     }
 
     private StoreResponseDTO mapToResponseDTO(Store store) {

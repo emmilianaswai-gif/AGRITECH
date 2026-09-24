@@ -26,6 +26,11 @@ public class StoreController {
         return ResponseEntity.ok(storeService.getAllStores());
     }
 
+    @GetMapping("/mine")
+    public ResponseEntity<List<StoreResponseDTO>> getMyStores() {
+        return ResponseEntity.ok(storeService.getMyStores());
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<StoreResponseDTO> getStore(@PathVariable Long id) {
         return ResponseEntity.ok(storeService.getStoreById(id));
