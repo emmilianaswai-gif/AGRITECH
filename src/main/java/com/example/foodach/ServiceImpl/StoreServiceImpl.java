@@ -40,11 +40,6 @@ public class StoreServiceImpl implements StoreService {
     }
 
     private StoreResponseDTO addStoreForCurrentUser(StoreRequestDTO requestDTO, String currentUserId) {
-        if (requestDTO.phone() != null && !requestDTO.phone().isBlank()
-                && userRepository.existsByPhoneNumber(requestDTO.phone())) {
-            throw new RuntimeException("This phone number is already registered to another account");
-        }
-
         User owner = userRepository.findById(currentUserId).orElse(null);
         if (owner == null) {
             throw new RuntimeException("User identity is required");
@@ -59,6 +54,8 @@ public class StoreServiceImpl implements StoreService {
         store.setOwnerId(currentUserId);
         store.setCategory(requestDTO.category());
         store.setLocation(requestDTO.location());
+        store.setCountry(requestDTO.country());
+        store.setRegion(requestDTO.region());
         store.setDescription(requestDTO.description());
         store.setPhone(requestDTO.phone());
         store.setEmail(requestDTO.email());
@@ -98,6 +95,8 @@ public class StoreServiceImpl implements StoreService {
         store.setOwnerId(savedOwner.getUuid());
         store.setCategory(requestDTO.category());
         store.setLocation(requestDTO.location());
+        store.setCountry(requestDTO.country());
+        store.setRegion(requestDTO.region());
         store.setDescription(requestDTO.description());
         store.setPhone(requestDTO.phone());
         store.setEmail(requestDTO.email());
@@ -119,8 +118,12 @@ public class StoreServiceImpl implements StoreService {
     }
 
     @Override
-    public List<StoreResponseDTO> getAllStores() {
+    public List<StoreResponseDTO> getAllStores(String country, String region) {
         return repository.findAll().stream()
+                .filter(s -> country == null || country.isBlank()
+                        || country.equalsIgnoreCase(s.getCountry()))
+                .filter(s -> region == null || region.isBlank()
+                        || region.equalsIgnoreCase(s.getRegion()))
                 .map(this::mapToResponseDTO)
                 .collect(Collectors.toList());
     }
@@ -157,6 +160,8 @@ public class StoreServiceImpl implements StoreService {
                 store.getName(),
                 store.getCategory(),
                 store.getLocation(),
+                store.getCountry(),
+                store.getRegion(),
                 store.getDescription(),
                 store.getPhone(),
                 store.getEmail(),

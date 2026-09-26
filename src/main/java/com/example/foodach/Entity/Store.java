@@ -29,6 +29,10 @@ public class Store {
 
     private String location;
 
+    private String country;
+
+    private String region;
+
     @Column(columnDefinition = "TEXT")
     private String description;
 

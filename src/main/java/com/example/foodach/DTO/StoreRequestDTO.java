@@ -6,6 +6,8 @@ public record StoreRequestDTO(
         String name,
         String category,
         String location,
+        String country,
+        String region,
         String description,
         String phone,
         String email,

@@ -22,8 +22,10 @@ public class StoreController {
     }
 
     @GetMapping
-    public ResponseEntity<List<StoreResponseDTO>> getAllStores() {
-        return ResponseEntity.ok(storeService.getAllStores());
+    public ResponseEntity<List<StoreResponseDTO>> getAllStores(
+            @RequestParam(required = false) String country,
+            @RequestParam(required = false) String region) {
+        return ResponseEntity.ok(storeService.getAllStores(country, region));
     }
 
     @GetMapping("/mine")

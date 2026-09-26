@@ -8,7 +8,7 @@ import java.util.List;
 public interface StoreService {
     StoreResponseDTO addStore(StoreRequestDTO requestDTO);
     List<StoreResponseDTO> getMyStores();
-    List<StoreResponseDTO> getAllStores();
+    List<StoreResponseDTO> getAllStores(String country, String region);
     StoreResponseDTO getStoreById(Long id);
     void deleteStore(Long id);
 }
